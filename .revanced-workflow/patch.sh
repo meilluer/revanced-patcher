@@ -7,7 +7,7 @@ echo "📁 Current working directory: $(pwd)"
 mkdir -p revanced
 cd revanced || { echo "❌ Failed to enter 'revanced' directory"; exit 1; }
 
-USER_AGENT="revanced-patcher"
+USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 # === 1. Download ReVanced CLI ===
 echo "🌐 Fetching ReVanced CLI (.jar)..."
@@ -43,7 +43,10 @@ wget -q "$PATCHES_URL" -O patches.rvp || { echo "❌ Failed to download patches"
 
 # === 3. Get compatible YouTube version ===
 echo "🔍 Fetching latest compatible YouTube version..."
-YT_API_JSON=$(curl -Ls -H "User-Agent: $USER_AGENT" https://api.revanced.app/patches)
+YT_API_JSON=$(curl -Ls -H "User-Agent:" https://api.revanced.app/patches)
+echo "📦 Raw YouTube patch data:"
+echo "$YT_API_JSON" | head -n 20
+
 
 
 if ! echo "$YT_API_JSON" | jq . > /dev/null 2>&1; then
