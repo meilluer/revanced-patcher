@@ -43,7 +43,8 @@ wget -q "$PATCHES_URL" -O patches.rvp || { echo "❌ Failed to download patches"
 
 # === 3. Get compatible YouTube version ===
 echo "🔍 Fetching latest compatible YouTube version..."
-YT_API_JSON=$(curl -s -H "User-Agent: $USER_AGENT" https://api.revanced.app/patches)
+YT_API_JSON=$(curl -Ls -H "User-Agent: $USER_AGENT" https://api.revanced.app/patches)
+
 
 if ! echo "$YT_API_JSON" | jq . > /dev/null 2>&1; then
   echo "❌ Failed to parse YouTube patch data"
