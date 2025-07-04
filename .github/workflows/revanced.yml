@@ -1,38 +1,31 @@
-name: ReVanced Automation
+name: Patch YouTube with Revancify
 
 on:
-  workflow_dispatch:  # Manual trigger
-  schedule:
-    - cron: '0 2 * * *'  # Daily at 2AM UTC
+  workflow_dispatch: # Manual trigger
 
 jobs:
-  revanced:
+  build:
     runs-on: ubuntu-latest
+
     steps:
     - name: Checkout Repo
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Install dependencies
+    - name: Install Dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y wget curl jq
+        sudo apt update
+        sudo apt install -y git openjdk-17-jdk wget python3 python3-pip unzip
+        pip install -r https://raw.githubusercontent.com/decipher3114/Revancify/main/requirements.txt
 
-    - name: Run patch script
-      run: bash .revanced-workflow/patch.sh
+    - name: Clone Revancify
+      run: |
+        git clone https://github.com/decipher3114/Revancify.git
+        cd Revancify
+        python3 revancify.py -yt
 
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v2
+    - name: Upload Patched APK
+      uses: actions/upload-artifact@v4
       with:
-        files: revanced.apk
-        tag_name: revanced-latest
-        name: ReVanced Patched YouTube
-        body: "Latest patched YouTube with ReVanced"
-        overwrite: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: YouTube-ReVanced
+        path: Revancify/output/*.apk
+
