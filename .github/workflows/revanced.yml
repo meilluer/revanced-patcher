@@ -1,4 +1,4 @@
-name: Patch YouTube with Revancify
+name: ReVanced YouTube Builder
 
 on:
   workflow_dispatch:
@@ -8,10 +8,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repo
+    - name: Checkout this repository
       uses: actions/checkout@v3
 
-    - name: Install Dependencies
+    - name: Install Required Packages
       run: |
         sudo apt update
         sudo apt install -y git openjdk-17-jdk wget python3 unzip
@@ -19,7 +19,11 @@ jobs:
     - name: Clone Revancify
       run: |
         git clone https://github.com/decipher3114/Revancify.git
+
+    - name: Run Revancify
+      run: |
         cd Revancify
+        chmod +x revancify.py
         python3 revancify.py -yt
 
     - name: Upload Patched APK
@@ -27,4 +31,5 @@ jobs:
       with:
         name: YouTube-ReVanced
         path: Revancify/output/*.apk
+
 
