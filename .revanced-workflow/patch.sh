@@ -1,40 +1,43 @@
 #!/bin/bash
 set -e
 
-# Create working dir
+echo "📁 Setting up working directory..."
 mkdir -p revanced
 cd revanced
 
-# Download latest patches
-echo "Fetching latest ReVanced patches..."
-patches_url=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
-wget -O patches.jar "$patches_url"
+echo "🌐 Downloading latest ReVanced CLI..."
+CLI_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-cli/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
+wget -q "$CLI_URL" -O cli.jar
 
-# Download latest CLI
-echo "Fetching latest ReVanced CLI..."
-cli_url=$(curl -s https://api.github.com/repos/ReVanced/revanced-cli/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
-wget -O cli.jar "$cli_url"
+echo "🌐 Downloading latest ReVanced Patches..."
+PATCHES_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
+wget -q "$PATCHES_URL" -O patches.jar
 
-# Get suggested YouTube version
-echo "Getting suggested YouTube version..."
-yt_version=$(curl -s https://api.revanced.app/v2/patches | jq -r '.[] | select(.compatiblePackages[].name == "com.google.android.youtube") | .compatiblePackages[].versions[0]')
-echo "Latest compatible YouTube version: $yt_version"
+echo "🌐 Downloading latest ReVanced Integrations..."
+INTEGRATION_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-integrations/releases/latest | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
+wget -q "$INTEGRATION_URL" -O integrations.apk
 
-# Download YouTube APK from apkmirror (may require manual intervention)
-echo "Downloading YouTube APK $yt_version..."
-apk_file="youtube.apk"
-wget -q "https://github.com/AlexW750/apkmirror-scraper/releases/latest/download/Youtube-${yt_version}.apk" -O "$apk_file" || {
-    echo "Failed to download YouTube APK. You must provide it manually or use a custom scraper."
+echo "🔍 Fetching latest compatible YouTube version..."
+YTVERSION=$(curl -s https://api.revanced.app/v2/patches | jq -r '.[] | select(.compatiblePackages[].name == "com.google.android.youtube") | .compatiblePackages[].versions[0]')
+echo "✅ Compatible YouTube version: $YTVERSION"
+
+echo "⬇️ Downloading YouTube APK (mock link for demo)..."
+YOUTUBE_APK="youtube.apk"
+# ⚠️ Replace this with your actual scraper or upload URL if needed
+YT_DL_URL="https://github.com/AlexW750/apkmirror-scraper/releases/latest/download/Youtube-${YTVERSION}.apk"
+
+wget -q "$YT_DL_URL" -O "$YOUTUBE_APK" || {
+    echo "❌ Failed to download YouTube APK from $YT_DL_URL"
     exit 1
 }
 
-# Patch APK
-echo "Patching YouTube APK..."
+echo "🧩 Running patching process..."
 java -jar cli.jar patch \
-  --patches patches.jar \
-  --merge \
-  --exclusive \
-  --out ../patched.apk \
-  "$apk_file"
+  -b patches.jar \
+  -m integrations.apk \
+  -o ../revanced.apk \
+  "$YOUTUBE_APK"
 
+echo "✅ Patching complete. Output: revanced.apk"
 cd ..
+
