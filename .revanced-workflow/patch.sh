@@ -1,42 +1,65 @@
 #!/bin/bash
 set -e
 
-echo "🔧 STARTING PATCH SCRIPT (Minimal Mode)"
-echo "📁 Working directory: $(pwd)"
+echo "🔧 STARTING ReVanced Patch Script (Minimal Mode)"
+echo "📁 Current working directory: $(pwd)"
 
 mkdir -p revanced
-cd revanced || { echo "❌ Failed to enter revanced directory"; exit 1; }
+cd revanced || { echo "❌ Failed to enter 'revanced' directory"; exit 1; }
 
-# ReVanced CLI
+USER_AGENT="revanced-patcher"
+
+# === 1. Download ReVanced CLI ===
 echo "🌐 Fetching ReVanced CLI (.jar)..."
-CLI_JSON=$(curl -s https://api.github.com/repos/ReVanced/revanced-cli/releases/latest)
-echo "📄 CLI release: $(echo "$CLI_JSON" | jq -r '.name, .tag_name')"
+CLI_JSON=$(curl -s -H "Accept: application/vnd.github+json" \
+                   -H "User-Agent: $USER_AGENT" \
+                   https://api.github.com/repos/ReVanced/revanced-cli/releases/latest)
 
-CLI_URL=$(echo "$CLI_JSON" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
-echo "📥 CLI URL: $CLI_URL"
-wget -q "$CLI_URL" -O cli.jar || { echo "❌ CLI download failed"; exit 1; }
-
-# ReVanced Patches (.rvp)
-echo "🌐 Fetching ReVanced Patches (.rvp)..."
-PATCHES_JSON=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest)
-echo "📄 Patches release: $(echo "$PATCHES_JSON" | jq -r '.name, .tag_name')"
-
-PATCHES_URL=$(echo "$PATCHES_JSON" | jq -r '.assets[] | select(.name | endswith(".rvp")) | .browser_download_url')
-echo "📥 Patches URL: $PATCHES_URL"
-wget -q "$PATCHES_URL" -O patches.rvp || { echo "❌ Patches download failed"; exit 1; }
-
-# Get latest compatible YouTube version
-echo "🔍 Fetching latest compatible YouTube version..."
-YTVERSION=$(curl -s https://api.revanced.app/v2/patches \
-  | jq -r '.[] | select(.compatiblePackages[].name == "com.google.android.youtube") | .compatiblePackages[].versions[0]')
-
-if [[ -z "$YTVERSION" ]]; then
-  echo "❌ Could not determine compatible YouTube version"
+if ! echo "$CLI_JSON" | jq . > /dev/null 2>&1; then
+  echo "❌ Failed to parse CLI JSON response"
+  echo "$CLI_JSON" | head -n 20
   exit 1
 fi
-echo "✅ Latest YouTube version: $YTVERSION"
 
-# Download YouTube APK (adjust source as needed)
+CLI_URL=$(echo "$CLI_JSON" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
+echo "📥 CLI Download URL: $CLI_URL"
+wget -q "$CLI_URL" -O cli.jar || { echo "❌ Failed to download CLI"; exit 1; }
+
+# === 2. Download ReVanced Patches (.rvp) ===
+echo "🌐 Fetching ReVanced Patches (.rvp)..."
+PATCHES_JSON=$(curl -s -H "Accept: application/vnd.github+json" \
+                      -H "User-Agent: $USER_AGENT" \
+                      https://api.github.com/repos/ReVanced/revanced-patches/releases/latest)
+
+if ! echo "$PATCHES_JSON" | jq . > /dev/null 2>&1; then
+  echo "❌ Failed to parse Patches JSON response"
+  echo "$PATCHES_JSON" | head -n 20
+  exit 1
+fi
+
+PATCHES_URL=$(echo "$PATCHES_JSON" | jq -r '.assets[] | select(.name | endswith(".rvp")) | .browser_download_url')
+echo "📥 Patches Download URL: $PATCHES_URL"
+wget -q "$PATCHES_URL" -O patches.rvp || { echo "❌ Failed to download patches"; exit 1; }
+
+# === 3. Get compatible YouTube version ===
+echo "🔍 Fetching latest compatible YouTube version..."
+YT_API_JSON=$(curl -s -H "User-Agent: $USER_AGENT" https://api.revanced.app/v2/patches)
+
+if ! echo "$YT_API_JSON" | jq . > /dev/null 2>&1; then
+  echo "❌ Failed to parse YouTube patch data"
+  echo "$YT_API_JSON" | head -n 20
+  exit 1
+fi
+
+YTVERSION=$(echo "$YT_API_JSON" | jq -r '.[] | select(.compatiblePackages[].name == "com.google.android.youtube") | .compatiblePackages[].versions[0]')
+
+if [[ -z "$YTVERSION" ]]; then
+  echo "❌ Could not find compatible YouTube version"
+  exit 1
+fi
+echo "✅ Latest compatible YouTube version: $YTVERSION"
+
+# === 4. Download YouTube APK ===
 echo "⬇️ Downloading YouTube APK..."
 YOUTUBE_APK="youtube.apk"
 YT_DL_URL="https://github.com/AlexW750/apkmirror-scraper/releases/latest/download/Youtube-${YTVERSION}.apk"
@@ -46,9 +69,9 @@ wget -q "$YT_DL_URL" -O "$YOUTUBE_APK" || {
   exit 1
 }
 
-# Run patcher
-echo "🧩 Running ReVanced CLI patch..."
-echo "📂 Directory contents before patching:"
+# === 5. Patch YouTube APK ===
+echo "🧩 Running ReVanced patcher..."
+echo "📂 Files before patching:"
 ls -lh
 
 java -jar cli.jar patch \
@@ -59,7 +82,9 @@ java -jar cli.jar patch \
     exit 1
 }
 
-echo "✅ Patching completed successfully!"
+echo "✅ Patch complete!"
 ls -lh ../revanced.apk
+
 cd ..
+
 
