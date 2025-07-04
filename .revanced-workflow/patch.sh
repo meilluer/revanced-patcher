@@ -10,7 +10,14 @@ CLI_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-cli/releases/la
 wget -q "$CLI_URL" -O cli.jar
 
 echo "🌐 Downloading latest ReVanced Patches..."
-PATCHES_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
+PATCHES_URL=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest \
+  | jq -r '.assets[] | select(.name | test("patches.*\\.jar$")) | .browser_download_url')
+
+if [[ -z "$PATCHES_URL" ]]; then
+  echo "❌ Could not find patches JAR. Check release format."
+  exit 1
+fi
+
 wget -q "$PATCHES_URL" -O patches.jar
 
 echo "🌐 Downloading latest ReVanced Integrations..."
