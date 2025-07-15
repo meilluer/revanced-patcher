@@ -1,35 +1,103 @@
-name: ReVanced YouTube Builder
+name: Auto Patch YouTube with ReVanced
 
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *' # Runs daily at 02:00 UTC
 
 jobs:
-  build:
+  patch:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout this repository
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install Required Packages
-      run: |
-        sudo apt update
-        sudo apt install -y git openjdk-17-jdk wget python3 unzip
+      - name: Download latest ReVanced CLI
+        run: |
+          curl -sL https://api.github.com/repos/ReVanced/revanced-cli/releases/latest \
+            | jq -r '.assets[] | select(.name | test("jar$")) | .browser_download_url' \
+            | xargs -n 1 curl -L -o revanced-cli.jar
 
-    - name: Clone Revancify
-      run: |
-        git clone https://github.com/decipher3114/Revancify.git
+      - name: Download latest ReVanced Patches
+        run: |
+          curl -sL https://api.github.com/repos/ReVanced/revanced-patches/releases/latest \
+            | jq -r '.assets[] | select(.name | test("rvp$")) | .browser_download_url' \
+            | xargs -n 1 curl -L -o patches.rvp
 
-    - name: Run Revancify
-      run: |
-        cd Revancify
-        chmod +x revancify.py
-        python3 revancify.py -yt
+      - name: Generate patch list and hash
+        run: |
+          java -jar revanced-cli.jar list-patches --with-packages --with-versions --with-options patches.rvp > patchlist.txt
+          sha256sum patchlist.txt | cut -d ' ' -f 1 > patchlist.sha
 
-    - name: Upload Patched APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: YouTube-ReVanced
-        path: Revancify/output/*.apk
+      - name: Compare patch hash
+        id: check_patch
+        run: |
+          if [ -f .patchlist_prev.sha ]; then
+            if cmp -s patchlist.sha .patchlist_prev.sha; then
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Save hash for next run
+        if: steps.check_patch.outputs.skip != 'true'
+        run: cp patchlist.sha .patchlist_prev.sha
+
+      - name: Detect suggested YouTube version
+        if: steps.check_patch.outputs.skip != 'true'
+        id: yt_version
+        run: |
+          SUGGESTED_VERSION=$(grep -A 5 -i youtube patchlist.txt | grep -i version | head -1 | grep -oE '[0-9.]+' | head -1)
+          echo "version=$SUGGESTED_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Fetch YouTube APK from APKMirror (arm64-v8a)
+        if: steps.check_patch.outputs.skip != 'true'
+        id: fetch_apk
+        run: |
+          # APKMirror does not offer direct API downloads.
+          # The following is an automated but unofficial way to get the download page and parse the link.
+          # NOTE: APKMirror requires cookies/user-agent and sometimes manual download. This is a best-effort approach!
+          YT_VER=${{ steps.yt_version.outputs.version }}
+          PKG="com.google.android.youtube"
+          ARCH="arm64-v8a"
+
+          SEARCH_URL="https://www.apkmirror.com/uploads/?q=$PKG"
+          VERSION_URL=$(curl -s "$SEARCH_URL" | grep -i "/apk/google-inc/youtube/youtube-$YT_VER" | head -1 | grep -oE 'href="([^"]+)"' | head -1 | cut -d'"' -f2)
+
+          if [ -z "$VERSION_URL" ]; then
+            echo "Could not find APKMirror page for version $YT_VER"
+            exit 1
+          fi
+
+          DL_PAGE_URL="https://www.apkmirror.com$VERSION_URL"
+          FILE_PAGE=$(curl -s "$DL_PAGE_URL" | grep -i "$ARCH" | grep -i 'APK' | grep -oE 'href="([^"]+)"' | head -1 | cut -d'"' -f2)
+          if [ -z "$FILE_PAGE" ]; then
+            echo "Could not find APK variant for $ARCH"
+            exit 1
+          fi
+
+          FINAL_DL_PAGE="https://www.apkmirror.com$FILE_PAGE"
+          REAL_DL_LINK=$(curl -s "$FINAL_DL_PAGE" | grep -oP 'href="\K(https://download\.apkmirror\.com/[^"]+)' | head -1)
+          if [ -z "$REAL_DL_LINK" ]; then
+            echo "Could not extract download link"
+            exit 1
+          fi
+
+          curl -L -o youtube.apk "$REAL_DL_LINK"
+
+      - name: Patch YouTube APK
+        if: steps.check_patch.outputs.skip != 'true'
+        run: |
+          java -jar revanced-cli.jar patch -p patches.rvp youtube.apk
+
+      - name: Upload patched APK
+        if: steps.check_patch.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-revanced
+          path: youtube-patched.apk
 
 
